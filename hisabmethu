@@ -1,0 +1,185 @@
+
+
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<title>Order • Stock • Payment System</title>
+
+<style>
+body{font-family:Arial;background:#f4f6f8;padding:10px}
+h2,h3{text-align:center}
+input,button{width:100%;padding:8px;margin:4px 0}
+button{background:#0d6efd;color:#fff;border:none}
+table{width:100%;border-collapse:collapse;background:#fff;margin-top:10px}
+th,td{border:1px solid #999;padding:5px;text-align:center}
+th{background:#e9ecef}
+.del{background:#dc3545}
+.add{background:#198754}
+.low{background:#f8d7da}
+.hidden{display:none}
+.lock{max-width:300px;margin:100px auto;background:#fff;padding:15px;border-radius:10px}
+</style>
+</head>
+
+<body>
+
+<!-- 🔐 LOCK -->
+<div id="lockScreen" class="lock">
+<h2>🔐 পাসওয়ার্ড দিন</h2>
+<input type="password" id="lockPass">
+<button onclick="unlock()">Unlock</button>
+<button onclick="toggleLock()">Change Lock</button>
+<div id="lockChange" class="hidden">
+<input type="password" id="newPass" placeholder="নতুন পাসওয়ার্ড">
+<button onclick="saveLock()">Save</button>
+</div>
+</div>
+
+<div id="app" class="hidden">
+
+<h2>অর্ডার / স্টক / পেমেন্ট হিসাব</h2>
+
+<input id="filter" placeholder="কাস্টমার / পণ্য / নাম্বার" onkeyup="render()">
+
+<input type="date" id="date">
+<input id="customer" placeholder="কাস্টমার নাম">
+<input id="phone" placeholder="মোবাইল নাম্বার">
+
+<hr>
+
+<h3>🧾 Order Items</h3>
+
+<input id="product" list="productList" placeholder="পণ্যের নাম">
+<datalist id="productList"></datalist>
+
+<input type="number" id="price" placeholder="মূল্য">
+<input type="number" id="qty" placeholder="পরিমাণ (Qty)">
+<button class="add" onclick="addItem()">পণ্য যোগ করুন</button>
+
+<table>
+<thead>
+<tr><th>পণ্য</th><th>মূল্য</th><th>Qty</th><th>Total</th><th></th></tr>
+</thead>
+<tbody id="itemBody"></tbody>
+</table>
+
+<h3 id="orderTotal">মোট: 0 টাকা</h3>
+
+<input type="number" id="payment" placeholder="পরিশোধ">
+<button onclick="saveOrder()">অর্ডার সেভ করুন</button>
+
+<hr>
+
+<h3>📄 Orders</h3>
+<table>
+<thead>
+<tr>
+<th>তারিখ</th><th>কাস্টমার</th><th>নাম্বার</th>
+<th>মোট</th><th>পরিশোধ</th><th>বাকি</th>
+</tr>
+</thead>
+<tbody id="orderBody"></tbody>
+</table>
+
+</div>
+
+<script>
+/* 🔐 LOCK */
+const LOCK_KEY="ORDER_LOCK";
+if(!localStorage.getItem(LOCK_KEY)) localStorage.setItem(LOCK_KEY,"1234");
+
+function unlock(){
+ if(lockPass.value===localStorage.getItem(LOCK_KEY)){
+   lockScreen.style.display="none";
+   app.style.display="block";
+   render();
+ }else alert("ভুল পাসওয়ার্ড");
+}
+function toggleLock(){lockChange.classList.toggle("hidden")}
+function saveLock(){
+ if(newPass.value){
+  localStorage.setItem(LOCK_KEY,newPass.value);
+  alert("Lock পরিবর্তন হয়েছে");
+  newPass.value="";
+ }
+}
+
+/* DATA */
+let orders=JSON.parse(localStorage.getItem("orders"))||[];
+let stock=JSON.parse(localStorage.getItem("stock"))||{};
+let items=[];
+
+function save(){
+ localStorage.setItem("orders",JSON.stringify(orders));
+ localStorage.setItem("stock",JSON.stringify(stock));
+}
+
+/* PRODUCT SUGGEST */
+function updateProducts(){
+ productList.innerHTML=Object.keys(stock)
+ .map(p=>`<option value="${p}">`).join("");
+}
+
+/* ADD ITEM */
+function addItem(){
+ let p=product.value, pr=+price.value, q=+qty.value;
+ if(!p||!pr||!q) return alert("সব দিন");
+
+ if(stock[p]!==undefined && stock[p]<q)
+   return alert("স্টক নেই!");
+
+ items.push({p,pr,q});
+ product.value=price.value=qty.value="";
+ renderItems();
+}
+
+function renderItems(){
+ let t=0;
+ itemBody.innerHTML=items.map((i,idx)=>{
+  let tt=i.pr*i.q; t+=tt;
+  return `<tr>
+   <td>${i.p}</td><td>${i.pr}</td><td>${i.q}</td><td>${tt}</td>
+   <td><button class="del" onclick="items.splice(${idx},1);renderItems()">X</button></td>
+  </tr>`;
+ }).join("");
+ orderTotal.innerText="মোট: "+t+" টাকা";
+}
+
+/* SAVE ORDER */
+function saveOrder(){
+ if(!customer.value||items.length==0) return alert("অর্ডার অসম্পূর্ণ");
+
+ let total=items.reduce((s,i)=>s+i.pr*i.q,0);
+ let pay=+payment.value||0;
+ let due=total-pay;
+
+ items.forEach(i=>{
+  stock[i.p]=(stock[i.p]||0)-i.q;
+ });
+
+ orders.push({
+  date:date.value,
+  customer:customer.value,
+  phone:phone.value,
+  total,pay,due
+ });
+
+ items=[]; payment.value="";
+ save(); render();
+}
+
+/* RENDER */
+function render(){
+ orderBody.innerHTML=orders.map(o=>`
+ <tr>
+ <td>${o.date}</td><td>${o.customer}</td><td>${o.phone}</td>
+ <td>${o.total}</td><td>${o.pay}</td><td>${o.due}</td>
+ </tr>`).join("");
+ updateProducts();
+}
+
+date.value=new Date().toISOString().split("T")[0];
+</script>
+</body>
+</html>
